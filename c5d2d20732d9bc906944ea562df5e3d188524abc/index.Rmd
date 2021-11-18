@@ -1,0 +1,1206 @@
+---
+title: "Dashboard Correios"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: bootstrap
+    logo: logo-coplan-2.png
+    favicon:  logo-coplan-2.png
+    navbar:
+      - { title:  "Perído de Apuração: 01/OUT/2020 a 31/OUT/2021"}
+  
+---
+
+Custos R$ {data-icon="fa-chart-pie"}
+======
+
+```{r preparando o ambiente, echo=FALSE, warning=FALSE, message=FALSE}
+
+# install.packages("readx1","gplots","flexdashboard","dplyr","tidyr","ggplot2","tidyverse","forcats","Rcpp","RColorBrewer","flexdashboard","ggthemes", "gridExtra","DT","lubridate", "paletteer", "palr")
+
+library(lubridate)
+library(flexdashboard)
+library(readxl)
+library(base)
+library(tidyverse)
+library(gplots)
+library(ggplot2)
+library(dplyr, warn.conflicts = FALSE)
+library(magrittr)
+library(flexdashboard)
+library(tidyr)
+library(forcats)
+library(RColorBrewer)
+library(ggthemes)
+library(gridExtra)
+library(DT)
+library(paletteer)
+library(palr)
+library(svDialogs)
+
+
+# ultima_datinha <- dlg_input(message = "Data do ultimo arquivo .Rdata no formato 'ANO-MES-DIA'", default = "", gui = .GUI)
+# ultima_datinha <- ultima_datinha[["res"]]
+  
+# load(paste("~/R/base_correios/bases_correios_", ultima_datinha, ".RData", sep=""))
+
+load("C:/Users/03417022185/Documents/R/base_correios/bases_correios_2021-11-05.RData")
+options(repos = list(CRAN="http://cran.rstudio.com/"))
+
+
+```
+
+
+
+```{r verificando se existem tabelas novas para rbind}
+
+arquivos_do_diretorio <- c(dir())
+
+tem_alteracao_faturas <- "não"
+tem_alteracao_encargos <- "não"
+
+#Faturas Total
+i <- 0
+i <- numeric(i)
+
+for(i in 1:length(arquivos_do_diretorio)) {
+  #print(i)
+  if (arquivos_do_diretorio[i] == "Novas_Faturas.RData") {
+    #print(i)
+    #posicao_arquivo <- as.integer(i)
+    #Faturas_Estruturadas <- read_excel("Faturas_Estruturadas.xlsx",col_names=TRUE)
+    load("~/R/Novas_Faturas.RData")
+    #Faturas_Estruturadas <- Faturas_Novas
+    tem_alteracao_faturas <- "sim"
+  }
+  #i <- i + 1
+}
+
+
+#Encargos Total
+i <- 0
+i <- numeric(i)
+
+for(i in 1:length(arquivos_do_diretorio)) {
+  #print(i)
+  if (arquivos_do_diretorio[i] == "Novas_Faturas.RData") {
+    #print(i)
+    #Encargos_Estruturados <- read_excel("Encargos_Estruturados.xlsx",col_names=TRUE)
+    load("~/R/Novas_Faturas.RData")
+    #Encargos_Estruturados <- Encargos_Novos
+    tem_alteracao_encargos <- "sim"
+  }
+  #i <- i + 1
+}
+
+#rm(i, arquivos_do_diretorio)
+
+
+#juntando os novos arquivos na base
+
+if (tem_alteracao_faturas == "sim") {
+  Faturas_Total <- bind_rows(Faturas_Total, Faturas_Novas)
+}
+
+
+if (tem_alteracao_encargos == "sim") {
+Encargos_Total <- bind_rows(Encargos_Total, Encargos_Novos)
+}
+
+rm(i, arquivos_do_diretorio, Encargos_Novos, Faturas_Novas)
+
+
+#rm(Encargos_Estruturados, Faturas_Estruturadas)
+
+#salvando arquivo do workspace
+
+if (tem_alteracao_faturas == "sim" | tem_alteracao_encargos == "sim"){ 
+  
+  datinha <- Sys.Date()
+  save.image(paste("~/R/base_correios/bases_correios_", datinha ,".RData", sep = ""))
+  
+  #carregando novo workspace
+  #load("~/R/base_correios/bases_correios_atualizadas.RData")
+}
+
+rm(tem_alteracao_faturas, tem_alteracao_encargos)
+
+```
+
+
+Column {.tabset}
+------
+
+
+### Gráfico 1
+
+```{r regiao x soma valor liquido da fatura, echo=FALSE, warning=FALSE, message=FALSE}
+
+regiao_custo <-
+  Faturas_Total %>% 
+  dplyr::select(regiao, categorias, servico, valor_do_servico) %>% 
+  #filter(regiao %in% c("OC","1ª regiao","2ª regiao","3ª regiao", "4ª regiao", "5ª regiao")) %>% 
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>% 
+  group_by(regiao) %>%
+  summarise(
+    # servicos_sem_ecartas = 
+    soma_servicos = sum(valor_do_servico),
+    qtd_servicos = n())
+
+
+#custo total por região considerando a soma do valor dos serviços sem encargos e afins
+regiao_custo %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(regiao, soma_servicos), y = soma_servicos, fill = regiao), stat = "identity", show.legend = FALSE) +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","),
+                       breaks = seq(from = 0, to = 600000, by = 100000)) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$",
+       fill = "Região") +
+   ggtitle("Custo por Região",
+          subtitle = "Todos os tipos de serviço (exceto E-CARTA)") +
+  coord_cartesian(ylim = c(0,600000)) +
+  geom_text(mapping = aes(x = regiao, 
+                          y = soma_servicos, label = format(soma_servicos, decimal.mark = ",", big.mark = ".")), size = 2.5, angle = 0, vjust = -1.) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5), 
+    axis.text.y = element_text(size = 6),
+    axis.title.y=element_text(size = 6),
+    axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank())  +  
+  annotate("text", x = 2, y = 350000, label = "
+          Encargos e afins não 
+          foram considerados",
+           size = 3)
+
+```
+
+### Gráfico 2 
+
+
+```{r custo por centro de custo,echo=FALSE, warning=FALSE, message=FALSE}
+
+centro_custo <-
+  Faturas_Total %>% 
+  dplyr::select(centro_custo, regiao, categorias, servico, valor_do_servico) %>% 
+  #filter(regiao %in% c("OC","1ª regiao","2ª regiao","3ª regiao", "4ª regiao", "5ª regiao")) %>% 
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>% 
+  group_by(centro_custo, regiao) %>%
+  summarise(soma_servicos = sum(valor_do_servico),
+            qtd_servicos = n())
+  
+centro_custo %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(centro_custo, soma_servicos), y = soma_servicos, fill = regiao), 
+           stat = "identity", position = "dodge") + 
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","),
+                     breaks = seq(from = 0, to = 600000, by = 100000)) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$",
+       fill = "Região") +
+  ggtitle("Custo por Centro de Custo",
+          subtitle = "Todos os tipos de serviço (exceto E-CARTA)") +
+  coord_cartesian(ylim = c(0,700000)) +
+  geom_text(mapping = aes(x = forcats::fct_reorder(centro_custo, soma_servicos), 
+  y = soma_servicos, label = format(soma_servicos, decimal.mark = ",", big.mark = ".")), size = 2, angle = 90, hjust = -0.1) +
+  theme_classic() +
+  theme(text = element_text(size=10, color="navy"),
+        plot.subtitle = element_text(hjust = 0.5), 
+        plot.title = element_text(hjust = 0.5), 
+        axis.title.y = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.text.x = element_text(size = 6, angle = 65, hjust = 1),
+        panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.title = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.text = element_text(size = 6)
+        # annotate("text", x = 10, y = 50000, label = "
+        #   A soma do valor total
+        #   do serviço em R$ e a 
+        #   quantidade de vezes que
+        #   o serviço foi utilizado",
+        #    size = 3)
+        # 
+    ) 
+
+#+  
+  # annotate("text", x = 2, y = 350000, label = "
+  #         Encargos e afins não 
+  #         foram considerados",
+  #          size = 3)
+
+```
+
+### Gráfico 3
+
+
+```{r custo total dos servicos, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+
+#QUANTO CADA SERVIÇO CUSTOU NO TOTAL
+
+servicos_total <- Faturas_Total %>% 
+  dplyr::select(servico, categorias, codigo_do_servico, valor_do_servico) %>% 
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>% 
+  group_by(servico, codigo_do_servico) %>% 
+  summarise(valor.total = sum(valor_do_servico)) %>% 
+  mutate(
+    servico = paste(servico, "|", codigo_do_servico),
+    codigo_do_servico = NULL,
+    valor.total.formatado = format(valor.total, big.mark = ".", decimal.mark = ","))
+
+
+#exibindo apenas valores acima de 1000
+servicos_total <-
+  servicos_total %>% 
+  subset(valor.total >= 500)
+
+#setando as cores
+corDegrade <- colorRampPalette(c("#0080ff", "#cce6ff"))
+
+#gráfico
+servicos_total %>% 
+  ggplot(aes(x = forcats::fct_reorder(servico, valor.total), y = valor.total, fill = servico)) +
+  geom_bar(show.legend = FALSE, stat = "identity") +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","),
+                     breaks = seq(from = 0, to = 600000, by = 50000)) +
+  coord_flip(ylim = c(0,650000)) +
+  geom_text(aes(x = servico, y = valor.total, label = valor.total.formatado), show.legend = FALSE, size = 2, hjust = -0.3) +
+  #scale_fill_manual(breaks = servicos_v, values = c(paletteer_c("grDevices::Spectral", nrow(servicos_df)))) +
+  #scale_fill_brewer(palette = "Blues") +
+  scale_fill_manual(values = corDegrade(nrow(servicos_total))) +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Custo por Serviço",
+          subtitle = "Todos os tipos de serviços (exceto E-CARTA)") +
+  #coord_cartesian(xlim = c(0,400000)) +
+  theme_minimal() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5), 
+    axis.title.y=element_text(size = 6),
+    axis.title.x=element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(size = 6, angle = 65, hjust = 1),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) +
+    annotate("text", x = 7, y = 400000, label = "
+          Considerando-se apenas valores
+          acima de R$ 500,00",
+           size = 2.5)
+
+```
+
+
+### Gráfico 4
+
+```{r verifica se existem novas categorias, echo=FALSE, message=FALSE, warning=FALSE}
+
+categorias_servicos_df <-
+  Faturas_Total %>% 
+  select(centro_custo, categorias) %>% 
+  group_by(categorias) %>% 
+  summarise()
+
+if (nrow(categorias_servicos_df) > 16){
+  dlg_message("Atencao! Ha novas categorias!" ,type = "ok", gui = .GUI)
+}
+
+# nova_categoria <- Faturas_Total %>% 
+#   filter(codigo_do_servico == numero_nova_categoria)
+
+```
+
+
+```{r uso dos servicos por regiao, echo=FALSE, message=FALSE, warning=FALSE}
+
+# colourCont = 12
+# getPallete = colorRampPalette(brewer.pal(8, "Set1"))
+
+#rastreando as categorias
+# categorias_servicos_df <-
+#   Faturas_Total %>% 
+#   select(centro_custo, categorias) %>% 
+#   group_by(categorias) %>% 
+#   summarise()
+
+categorias_servicos_v <- unlist(c(categorias_servicos_df))
+
+regioes_percent_servicos <-
+  Faturas_Total %>%
+  dplyr::select(regiao, categorias, valor_do_servico, servico) %>%
+  group_by(regiao, categorias) %>%
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>%
+  summarise(soma_servicos = sum(valor_do_servico))
+
+regioes_percent_servicos %>%
+ggplot(aes(x = soma_servicos, y = reorder(regiao, soma_servicos, sum), fill = categorias)) +
+  geom_col() +
+  labs(title = "",
+       subtitle = "",
+       x = "R$",
+       y = "") +
+  coord_cartesian(xlim = c(0,600000)) +
+  ggtitle("Proporção dos Serviços por Região",
+          subtitle = "Todos os tipos de serviço (exceto E-CARTA)") +
+  #scale_fill_manual(values = getPallete(colourCont)) +
+  #scale_fill_manual(breaks = "CARTA OUTROS", "CARTA RG AR CHANC", "CARTA RG OUTROS", "CARTA RG PL3 CHANC", "CARTA SIMPLES CHANC", "E-CARTA C/ AR",
+  #                  "E-CARTA REG", "E-CARTA SIMPLES", "EMBALAGENS", "MALOTE", "OUTROS SERVICOS", "PAC", "SEDEX", "SELO", "SPP A VISTA") +
+  scale_fill_manual(breaks = categorias_servicos_v, values = c(paletteer_c("grDevices::Spectral", nrow(categorias_servicos_df)))) +
+  scale_x_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","), breaks = seq(from = 0, to = 600000, by = 50000)) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.title = element_text(hjust = 0.5),
+    axis.text.y = element_text(size = 6),
+    axis.title.x=element_text(size = 6),
+    axis.text.x = element_text(size = 6),
+    panel.grid.major.x = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.y = element_blank(),
+    legend.title = element_blank(),
+    legend.key.size = unit(0.3, "cm"),
+    legend.text = element_text(size = 6),
+    legend.direction = "horizontal",
+    legend.position = "bottom"
+)
+
+```
+
+### Gráfico 5
+
+
+```{r uso dos servicos por centro de custo, echo=FALSE, warning=FALSE, message=FALSE}
+
+# colourCont = 12
+# getPallete = colorRampPalette(brewer.pal(8, "Set1"))
+
+#rastreando as categorias
+categorias_servicos_df <-
+  Faturas_Total %>% 
+  select(centro_custo, categorias) %>% 
+  group_by(categorias) %>% 
+  summarise()
+
+categorias_servicos_v <- unlist(c(categorias_servicos_df))
+
+
+cencusto_percent_servicos <-
+  Faturas_Total %>%
+  dplyr::select(centro_custo, categorias, valor_do_servico, servico) %>%
+  group_by(centro_custo, categorias) %>%
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>%
+  summarise(soma_servicos = sum(valor_do_servico))
+
+cencusto_percent_servicos %>%
+ggplot(aes(x = soma_servicos, y = reorder(centro_custo, soma_servicos, sum), fill = categorias)) +
+  geom_col() +
+  labs(title = "",
+       subtitle = "",
+       x = "R$",
+       y = "") +
+  coord_cartesian(xlim = c(0,600000)) +
+  ggtitle("Proporção dos Serviços por Centro de Custo",
+          subtitle = "Todos os tipos de serviço (exceto E-CARTA)") +
+  #scale_fill_manual(values = getPallete(colourCont)) +
+  #scale_fill_brewer(palette = "Set1") +
+  scale_fill_manual(breaks = categorias_servicos_v, values = c(paletteer_c("grDevices::Spectral", nrow(categorias_servicos_df)))) +
+  scale_x_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","), breaks = seq(from = 0, to = 600000, by = 50000)) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.title = element_text(hjust = 0.5),
+    axis.text.y = element_text(size = 6),
+    axis.title.x=element_text(size = 6),
+    axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
+    panel.grid.major.x = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.y = element_blank(),
+    legend.title = element_blank(),
+    legend.key.size = unit(0.3, "cm"),
+    legend.text = element_text(size = 6)
+# legend.direction = "horizontal",
+# legend.position = "bottom"
+)
+
+```
+
+
+Serviços {data-orientation=column, data-icon="fa-chart-bar"}
+======
+
+Column {.tabset}
+-----
+
+### E-CARTA
+
+```{r servicos por regiao E-CARTA, echo=FALSE, warning=FALSE, message=FALSE}
+
+recorrenciaXcusto_total_ecarta <-
+  Faturas_Total %>% 
+  dplyr::select(categorias, servico, codigo_do_servico, valor_do_servico, regiao) %>% 
+  filter(regiao %in% c("OC")) %>% 
+  filter(categorias == "E-CARTA SIMPLES" | categorias == "E-CARTA REG" | categorias == "E-CARTA C/ AR") %>% 
+  group_by(servico, codigo_do_servico, regiao) %>%
+  summarise(soma_servicos = sum(valor_do_servico),
+            qtd_servicos = n()) %>% 
+  mutate(servico = paste(servico, "|", codigo_do_servico))
+
+recorrenciaXcusto_total_ecarta$soma_servicos <- as.numeric(recorrenciaXcusto_total_ecarta$soma_servicos)
+recorrenciaXcusto_total_ecarta$soma_servicos <- format(recorrenciaXcusto_total_ecarta$soma_servicos, decimal.mark = ",", big.mark = ".")
+
+degrade_ecarta <- paletteer_c("grDevices::Light Grays", nrow(recorrenciaXcusto_total_ecarta))
+  
+recorrenciaXcusto_total_ecarta %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, fill = servico), show.legend = FALSE, stat = 'identity', position = "dodge") +
+geom_point(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, colour = servico), show.legend = FALSE) +
+    scale_fill_manual(values = degrade_ecarta) +
+  scale_colour_manual(values = degrade_ecarta) +
+ labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Serviço, Frequência e Valor Total",
+          subtitle = "Somente E-CARTA") +
+  geom_text(aes(x = servico, y = soma_servicos, label = format(qtd_servicos, decimal.mark = ",", big.mark = ".")), angle = 90, size = 2, colour = "black", position = position_stack(vjust = 0.9)) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5),
+    axis.text.y = element_text(size = 6),
+    axis.title.y = element_text(size = 6),
+    axis.text.x = element_text(angle = 45, size = 6, hjust = 1.),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank())
+
+```
+
+
+### OC
+
+```{r servicos por regiao OC, echo=FALSE, warning=FALSE, message=FALSE}
+
+recorrenciaXcusto_total <-
+  Faturas_Total %>% 
+  dplyr::select(categorias, servico, codigo_do_servico, valor_do_servico, regiao) %>% 
+  filter(regiao %in% c("OC")) %>% 
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>% 
+  group_by(servico, codigo_do_servico, regiao) %>%
+  summarise(soma_servicos = sum(valor_do_servico),
+            qtd_servicos = n()) %>% 
+  mutate(servico = paste(servico, "|", codigo_do_servico))
+
+recorrenciaXcusto_total$soma_servicos <- as.numeric(recorrenciaXcusto_total$soma_servicos)
+recorrenciaXcusto_total$soma_servicos <- format(recorrenciaXcusto_total$soma_servicos, decimal.mark = ",", big.mark = ".")
+
+degradeoc <- paletteer_d("ggsci::yellow_material")
+
+recorrenciaXcusto_total %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos , fill = servico), show.legend = FALSE, stat = 'identity', position = "dodge") +
+geom_point(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, colour = servico), show.legend = FALSE) +
+  scale_fill_manual(values = degradeoc) +
+  scale_colour_manual(values = degradeoc) +
+ labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Serviço, Frequência e Valor Total",
+          subtitle = "Todos os serviços (exceto E-CARTA)") +
+  geom_text(aes(x = servico, y = soma_servicos, label = format(qtd_servicos, decimal.mark = ",", big.mark = ".")), angle = 90, size = 2, colour = "black", position = position_stack(vjust = 0.9)) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5),
+    axis.text.y = element_text(size = 6),
+    axis.title.y = element_text(size = 6),
+    axis.text.x = element_text(angle = 45, size = 6, hjust = 1.),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank())
+
+
+
+
+```
+
+
+
+
+### 1ª Regiao
+```{r servicos por regiao 1, echo=FALSE, warning=FALSE, message=FALSE}
+
+recorrenciaXcusto_total <-
+  Faturas_Total %>% 
+  dplyr::select(servico, codigo_do_servico, valor_do_servico, regiao) %>% 
+  filter(regiao %in% c("1ª regiao")) %>% 
+  group_by(servico, codigo_do_servico, regiao) %>%
+  summarise(soma_servicos = sum(valor_do_servico),
+            qtd_servicos = n()) %>% 
+  mutate(servico = paste(servico, "|", codigo_do_servico))
+
+recorrenciaXcusto_total$soma_servicos <- as.numeric(recorrenciaXcusto_total$soma_servicos)
+recorrenciaXcusto_total$soma_servicos <- format(recorrenciaXcusto_total$soma_servicos, decimal.mark = ",", big.mark = ".")
+
+degrade1r <- paletteer_c("ggthemes::Classic Red", nrow(recorrenciaXcusto_total))
+
+recorrenciaXcusto_total %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, fill = servico), show.legend = FALSE, stat = 'identity', position = "dodge") +
+geom_point(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, colour = servico), show.legend = FALSE) +
+  scale_fill_manual(values = degrade1r) +
+  scale_colour_manual(values = degrade1r) +
+ labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+   ggtitle("Serviço, Frequência e Valor Total",
+          subtitle = "Todos os serviços") +
+  geom_text(aes(x = servico, y = soma_servicos, label = format(qtd_servicos, decimal.mark = ",", big.mark = ".")), angle = 90, size = 2, colour = "black", position = position_stack(vjust = 0.9)) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5),
+    axis.title.y = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(angle = 45, size = 6, hjust = 1.),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) 
+
+```
+
+### 2ª Região
+
+```{r servicos por regiao 2, echo=FALSE, warning=FALSE, message=FALSE}
+
+recorrenciaXcusto_total <-
+  Faturas_Total %>% 
+  dplyr::select(servico, codigo_do_servico, valor_do_servico, regiao) %>% 
+  filter(regiao %in% c("2ª regiao")) %>% 
+  group_by(servico, codigo_do_servico, regiao) %>%
+  summarise(soma_servicos = sum(valor_do_servico),
+            qtd_servicos = n()) %>% 
+  mutate(servico = paste(servico, "|", codigo_do_servico))
+
+recorrenciaXcusto_total$soma_servicos <- as.numeric(recorrenciaXcusto_total$soma_servicos)
+recorrenciaXcusto_total$soma_servicos <- format(recorrenciaXcusto_total$soma_servicos, decimal.mark = ",", big.mark = ".")
+
+degrade2r <- paletteer_c("ggthemes::Blue", nrow(recorrenciaXcusto_total))
+
+recorrenciaXcusto_total %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, fill = servico), show.legend = FALSE, stat = 'identity', position = "dodge") +
+    geom_point(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, colour = servico), show.legend = FALSE) +
+  scale_fill_manual(values = degrade2r) +
+  scale_colour_manual(values = degrade2r) +
+ labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+   ggtitle("Serviço, Frequência e Valor Total", subtitle = "Todos os serviços") +
+  geom_text(aes(x = servico, y = soma_servicos, label = format(qtd_servicos, decimal.mark = ",", big.mark = ".")), angle = 90, size = 2, colour = "black", position = position_stack(vjust = .9)) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5),
+    axis.title.y = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(angle = 45, size = 6, hjust = 1.),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) 
+
+```
+
+### 3ª Região
+
+```{r servicos por regiao 3, echo=FALSE, warning=FALSE, message=FALSE}
+
+recorrenciaXcusto_total <-
+  Faturas_Total %>% 
+  dplyr::select(servico, codigo_do_servico, valor_do_servico, regiao) %>% 
+  filter(regiao %in% c("3ª regiao")) %>% 
+  group_by(servico, codigo_do_servico, regiao) %>%
+  summarise(soma_servicos = sum(valor_do_servico),
+            qtd_servicos = n()) %>% 
+  mutate(servico = paste(servico, "|", codigo_do_servico))
+
+recorrenciaXcusto_total$soma_servicos <- as.numeric(recorrenciaXcusto_total$soma_servicos)
+recorrenciaXcusto_total$soma_servicos <- format(recorrenciaXcusto_total$soma_servicos, decimal.mark = ",", big.mark = ".")
+
+degrade3r <- paletteer_c("ggthemes::Green", nrow(recorrenciaXcusto_total))
+
+recorrenciaXcusto_total %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, fill = servico), show.legend = FALSE, stat = 'identity', position = "dodge") +
+geom_point(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, colour = servico), show.legend = FALSE)+
+   scale_fill_manual(values = degrade3r) +
+  scale_colour_manual(values = degrade3r) +
+  labs(title = "",
+       subtitle = "l",
+       x = "",
+       y = "R$") +
+  ggtitle("Serviço, Frequência e Valor Total", subtitle = "Todos os serviços") +
+  geom_text(aes(x = servico, y = soma_servicos, label = format(qtd_servicos, decimal.mark = ",", big.mark = ".")), angle = 90, size = 2, colour = "black", position = "dodge", hjust = 1.1) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5),
+    axis.title.y = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(angle = 45, size = 6, hjust = 1.),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) 
+
+
+
+```
+
+
+### 4ª Região
+
+```{r servicos por regiao 4, echo=FALSE, warning=FALSE, message=FALSE}
+
+recorrenciaXcusto_total <-
+  Faturas_Total %>% 
+  dplyr::select(servico, codigo_do_servico, valor_do_servico, regiao) %>% 
+  filter(regiao %in% c("4ª regiao")) %>% 
+  group_by(servico, codigo_do_servico, regiao) %>%
+  summarise(soma_servicos = sum(valor_do_servico),
+            qtd_servicos = n()) %>% 
+  mutate(servico = paste(servico, "|", codigo_do_servico))
+
+recorrenciaXcusto_total$soma_servicos <- as.numeric(recorrenciaXcusto_total$soma_servicos)
+recorrenciaXcusto_total$soma_servicos <- format(recorrenciaXcusto_total$soma_servicos, decimal.mark = ",", big.mark = ".")
+
+degrade4r <- paletteer_c("ggthemes::Purple", nrow(recorrenciaXcusto_total))
+
+recorrenciaXcusto_total %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, fill = servico), show.legend = FALSE, stat = 'identity', position = "dodge") +
+  geom_point(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, colour = servico), show.legend = FALSE) +
+    scale_fill_manual(values = degrade4r) +
+  scale_colour_manual(values = degrade4r) +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Serviço, Frequência e Valor Total", subtitle = "Todos os serviços") +
+geom_text(aes(x = servico, y = soma_servicos, label = format(qtd_servicos, decimal.mark = ",", big.mark = ".")), angle = 90, size = 2, colour = "black", position = "dodge", hjust = 1.1) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5),
+    axis.title.y = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(angle = 45, size = 6, hjust = 1.),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) 
+
+  
+
+  
+
+```
+
+### 5ª Região
+
+```{r servicos por regiao 5, echo=FALSE, warning=FALSE, message=FALSE}
+
+recorrenciaXcusto_total <-
+  Faturas_Total %>% 
+  dplyr::select(servico, codigo_do_servico, valor_do_servico, regiao) %>% 
+  filter(regiao %in% c("5ª regiao")) %>% 
+  group_by(servico, codigo_do_servico, regiao) %>%
+  summarise(soma_servicos = sum(valor_do_servico),
+            qtd_servicos = n()) %>% 
+  mutate(servico = paste(servico, "|", codigo_do_servico))
+
+recorrenciaXcusto_total$soma_servicos <- as.numeric(recorrenciaXcusto_total$soma_servicos)
+recorrenciaXcusto_total$soma_servicos <- format(recorrenciaXcusto_total$soma_servicos, decimal.mark = ",", big.mark = ".")
+
+degrade5r <- paletteer_c("ggthemes::Orange", nrow(recorrenciaXcusto_total))
+
+recorrenciaXcusto_total %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, fill = servico), show.legend = FALSE, stat = 'identity', position = "dodge") +
+  geom_point(aes(x = forcats::fct_reorder(servico, soma_servicos), y = soma_servicos, colour = servico), show.legend = FALSE) +
+     scale_fill_manual(values = degrade5r) +
+  scale_colour_manual(values = degrade5r) +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Serviço, Frequência e Valor Total", subtitle = "Todos os serviços") +
+  geom_text(aes(x = servico, y = soma_servicos, label = format(qtd_servicos, decimal.mark = ",", big.mark = ".")), angle = 90, size = 2, colour = "black", position = position_stack(vjust = 0.9)) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5),
+    axis.title.y = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(angle = 45, size = 6, hjust = 1.),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) 
+
+
+```
+
+
+### Valor Médio
+```{r media do valor dos servicos,echo=FALSE, warning=FALSE, message=FALSE}
+
+qtd_servicos <-
+  Faturas_Total %>% 
+  dplyr::select(servico, valor_unitario_do_servico, codigo_do_servico) %>% 
+  group_by(servico, codigo_do_servico) %>% 
+summarise(valor_medio = mean(valor_unitario_do_servico)) %>% 
+  mutate(valor_medio = round(valor_medio, 2),
+         servico = paste(servico, "|", codigo_do_servico))
+
+
+degrade_vm <- paletteer_c("ggthemes::Classic Area Green", nrow(qtd_servicos))
+
+
+qtd_servicos %>% 
+  ggplot() +
+  geom_bar(aes(x = forcats::fct_reorder(servico, valor_medio), y = valor_medio, fill = servico), show.legend = FALSE, stat = 'identity') +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","),
+                                        breaks = seq(from = 0, to = 100.00, by = 10.00)) +
+  geom_text(aes(x = servico, y = valor_medio, label = valor_medio), show.legend = FALSE, size = 2, angle=90, hjust = -.2) +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Valor Médio por Serviço",
+          subtitle = "") +
+  scale_fill_manual(values = degrade_vm) +
+  coord_cartesian(ylim = c(0,90)) +
+  theme_classic() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5), 
+    axis.title.y=element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(size = 6, angle = 90, hjust = 1),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) +
+  annotate("text", x = 7, y = 70, label = 
+          paste(
+          "Ao todo são ", nrow(qtd_servicos), " 
+          tipos de serviços 
+          distintos"),
+           size = 2.5)
+
+
+```
+
+
+Séries  {data-icon="fas fa-chart-line"}
+======
+
+Column {.tabset}
+------
+
+### Serie 1
+
+```{r serie historica 1, echo=FALSE, warning=FALSE, message=FALSE}
+
+serie_custo_tot_regiao <-
+  Faturas_Total %>% 
+  dplyr::select(categorias, valor_do_servico, data_fechamento, servico) %>% 
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>% 
+  group_by(data_fechamento) %>% 
+  summarise(soma_servicos = sum(valor_do_servico)) %>% 
+  mutate(mes = str_sub(data_fechamento, 1,7),
+         mes = ym(mes),
+         mes = as.Date(mes))
+
+
+serie_custo_tot_regiao %>% 
+  ggplot() +
+  geom_line(aes(x = mes, y = soma_servicos)) +
+  #geom_line(aes(x = serie_custo_ecarta$mes, y = serie_custo_ecarta$soma_servicos)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b%-%Y") +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","), breaks = seq(from = 0, to = 1000000, by = 20000)) +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  coord_cartesian(ylim = c(0,200000)) +
+  ggtitle("Série Histórica",
+          subtitle = "Todas as regiões e serviços (exceto E-CARTA)") +
+  theme_minimal() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5), 
+    axis.title.y=element_text(size = 7),
+    axis.text.y = element_text(size = 7),
+    axis.text.x = element_text(size = 7, angle = 45),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    # panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) +
+  geom_vline(xintercept = as.numeric(as.Date("2020-12-01")), linetype=4, color = "red")
+
+
+```
+
+### Série 2
+
+```{r serie historica 2, echo=FALSE, warning=FALSE, message=FALSE}
+
+serie_custo_ecarta <-
+  Faturas_Total %>%
+  dplyr::select(regiao, categorias, valor_do_servico, data_fechamento, servico) %>%
+  group_by(regiao, data_fechamento) %>%
+  filter(categorias == "E-CARTA SIMPLES" | categorias == "E-CARTA REG" | categorias == "E-CARTA C/ AR") %>%
+  summarise(soma_servicos = sum(valor_do_servico)) %>%
+  mutate(mes = str_sub(data_fechamento, 1,7),
+         mes = ym(mes),
+         mes = as.Date(mes))
+
+serie_custo_ecarta %>%   
+ggplot() +
+  geom_line(aes(x = mes, y = soma_servicos)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b%-%Y") +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","), breaks = seq(from = 0, to = 8000000, by = 2000000)) +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Série Histórica",
+          subtitle = "somente E-CARTA") +
+  coord_cartesian(ylim = c(0,8000000)) +
+  theme_minimal() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5), 
+    axis.title.y=element_text(size = 7),
+    axis.text.y = element_text(size = 7),
+    axis.text.x = element_text(size = 7, angle = 45),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    # panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()) +
+  geom_vline(xintercept = as.numeric(as.Date("2020-12-01")), linetype=4, color = "red")
+
+```
+
+
+
+### Serie 3
+
+```{r serie historica 3, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+serie_custo_regioes <-
+  Faturas_Total %>% 
+  dplyr::select(regiao, categorias, valor_do_servico, data_fechamento, servico) %>% 
+  group_by(regiao, data_fechamento) %>% 
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>% 
+  summarise(soma_servicos = sum(valor_do_servico)) %>% 
+  mutate(mes = str_sub(data_fechamento, 1,7),
+         mes = ym(mes),
+         mes = as.Date(mes))
+
+
+serie_custo_regioes %>% 
+  ggplot(aes(x = mes, y = soma_servicos, colour = regiao)) +
+  geom_line( show.legend = FALSE) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b%-%Y") +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","), breaks = seq(from = 0, to = 1000000, by = 20000)) +
+  scale_colour_brewer(palette = "Set1") +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Série Histórica",
+          subtitle = "Todos os tipos de serviço (exceto E-CARTA)") +
+  #theme_foundation() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5), 
+    axis.title.y = element_text(size = 7),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(size = 6, angle = 90),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.major.x = element_line(color = "grey", linetype = "dotted"),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank()
+  #geom_vline(xintercept = as.numeric(as.Date("2020-12-01")), linetype=4, color = "black") 
+  )+
+  facet_wrap(~ regiao, nrow = 2, scale = "free_x")
+
+```
+
+
+### Série 4
+
+```{r serie historica 4, echo=FALSE, warning=FALSE, message=FALSE}
+
+serie_centro_custo <-
+  Faturas_Total %>% 
+  dplyr::select(centro_custo, categorias, valor_do_servico, data_fechamento, servico) %>% 
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>% 
+  filter(centro_custo == "PGFN CDA SERPRO DF" | centro_custo == "PFN BELO HORIZONTE MG" | centro_custo == "PRFN 3 REGIAO SAO PAULO SP" |
+           centro_custo == "PRFN 4 REGIAO PORTO ALEGRE RS" | centro_custo == "PFN BELEM PA") %>% 
+  group_by(centro_custo, data_fechamento) %>% 
+  summarise(soma_servicos = sum(valor_do_servico)) %>% 
+  mutate(mes = str_sub(data_fechamento, 1,7),
+         mes = ym(mes),
+         mes = as.Date(mes))
+
+
+serie_centro_custo %>%   
+ggplot() +
+  geom_line(aes(x = mes, y = soma_servicos, colour = centro_custo)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b%-%Y") +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ","), breaks = seq(from = 0, to = 200000, by = 20000)) +
+  scale_colour_brewer(palette = "Set2") +
+  labs(title = "",
+       subtitle = "",
+       x = "",
+       y = "R$") +
+  ggtitle("Série Histórica: Centros de Custo",
+          subtitle = "Os 5 que mais gastam") +
+  coord_cartesian(ylim = c(0,150000)) +
+  theme_minimal() +
+  theme(
+    text = element_text(size=10, color="navy"),
+    plot.subtitle = element_text(hjust = 0.5), 
+    plot.title = element_text(hjust = 0.5), 
+    axis.title.y=element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(size = 6, angle = 45),
+    panel.grid.major.y = element_line(color = "grey", linetype = "dotted"),
+    # panel.grid.major.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    legend.title = element_blank(),
+    legend.key.size = unit(0.3, "cm"),
+    legend.text = element_text(size = 6)) +
+  geom_vline(xintercept = as.numeric(as.Date("2020-12-01")), linetype=4, color = "black") +
+    annotate("text", x = as.Date("2021-02-01"), y = 100000, label = "
+          Todos os serviços 
+          exceto E-CARTA",
+           size = 2.5)
+
+
+```
+
+
+
+Tabelas  {data-icon="fas fa-table"}
+======
+
+Column {.tabset}
+------
+
+### Tabela 1
+
+
+```{r geralzao macro, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+servicos_total_custo <-
+  Faturas_Total %>% 
+  dplyr::select(regiao, categorias, servico, codigo_do_servico, valor_do_servico) %>% 
+  group_by(regiao, categorias, servico, codigo_do_servico) %>%
+  summarise(soma.servicos = sum(valor_do_servico),
+            recorrencia.servicos = n(),
+            valor.medio = (soma.servicos/recorrencia.servicos)) %>% 
+  mutate(servico = paste(servico, "|", codigo_do_servico),
+         soma.servicos = round(soma.servicos, 2),
+         valor.medio = round(valor.medio, 2),
+         #soma.servicos = format(soma.servicos, decimal.mark = ",", big.mark = "."),
+         # recorrencia.servicos = format(recorrencia.servicos, decimal.mark = ",", big.mark = "."),
+         #soma.servicos = paste("R$", soma.servicos),
+         codigo_do_servico = NULL)
+
+
+DT::datatable(servicos_total_custo[1:nrow(servicos_total_custo), 1:ncol(servicos_total_custo)], 
+              class = 'cell-border stripe', 
+              caption = 'Tabela 1: Valor e quantidade totais dos serviços por região (Todo o período do contrato)',
+              filter = 'top',
+              options = list(
+              pageLength = nrow(servicos_total_custo),
+              dom = 't'))
+
+```
+
+
+### Tabela 2
+
+
+```{r faturas e seus valores, echo=FALSE, warning=FALSE, message=FALSE}
+
+#TABELA EXCETO E-CARTA
+servico_nao_ecarta <- Faturas_Total %>% 
+  dplyr::select(numero_fatura, centro_custo, regiao, valor_do_servico, data_fechamento) %>% 
+  group_by(numero_fatura, centro_custo, regiao, data_fechamento) %>% 
+  #filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR")%>% 
+  summarise(Valor.Total = sum(valor_do_servico)) %>% 
+  mutate(Valor.Total = round(Valor.Total, 2))
+
+DT::datatable(servico_nao_ecarta[1:nrow(servico_nao_ecarta), 1:ncol(servico_nao_ecarta)], 
+              #class = "display",
+              class = 'cell-border stripe', 
+              caption = 'Tabela 2: Resumo das faturas',
+              filter = 'top',
+              options = list(
+              pageLength = nrow(servico_nao_ecarta),
+              dom = 'tp'),
+              rownames = FALSE)
+
+```
+
+
+### Tabela 3
+
+
+```{r detalhamento dos servicos oc, echo=FALSE, warning=FALSE, message=FALSE}
+
+# #TABELA SOMENTE E-CARTA
+# servicos_ecarta <- Faturas_Total %>%
+#   dplyr::select(regiao, centro_custo, servico, codigo_do_servico, quantidade_de_itens, valor_unitario_do_servico, valor_do_servico, numero_fatura, data_de_postagem, categorias) %>%
+#   filter(categorias == "E-CARTA SIMPLES" | categorias == "E-CARTA REG" | categorias == "E-CARTA C/ AR")%>%
+#   group_by(numero_fatura, regiao, centro_custo, servico, quantidade_de_itens, valor_do_servico, data_de_postagem) %>% 
+#   mutate(servico = paste(servico, "|", codigo_do_servico),
+#          codigo_do_servico = NULL) %>% 
+#   summarise()
+# 
+# DT::datatable(servico_nao_ecarta[1:nrow(servicos_ecarta), 1:ncol(servicos_ecarta)-1],
+#               #class = "display",
+#               class = 'cell-border stripe',
+#               caption = 'Tabela 4: Uma visão micro dos serviços (somente E-CARTA)',
+#               filter = 'top',
+#               options = list(
+#               pageLength = nrow(servicos_ecarta),
+#               dom = 't'))
+
+
+especifica_servicos_geral <-
+  Faturas_Total %>% 
+  dplyr::select(numero_fatura, regiao, centro_custo, categorias, servico, peso, codigo_do_servico, quantidade_de_itens, valor_unitario_do_servico, valor_do_servico) %>% 
+  #filter(regiao %in% c("OC","1ª regiao", "2ª regiao", "3ª regiao", "4ª regiao", "5ª regiao")) %>% 
+  filter(categorias != "E-CARTA SIMPLES" & categorias != "E-CARTA REG" & categorias != "E-CARTA C/ AR") %>% 
+  mutate(
+    servico = paste(servico, "|", codigo_do_servico),
+    codigo_do_servico = NULL,
+    #categorias = NULL,
+    #regiao = NULL
+    )
+
+DT::datatable(especifica_servicos_geral[1:nrow(especifica_servicos_geral), 1:ncol(especifica_servicos_geral)],
+              #class = "display",
+              class = 'cell-border stripe',
+              caption = 'Tabela 3: Detalhamento dos serviços (exceto E-CARTA)',
+              filter = 'top',
+              options = list(
+              pageLength = 100, #nrow(especifica_servicos_geral
+              dom = 'tp'))
+
+```
+
+### Tabela 4
+
+```{r quantidade de faturas, echo=FALSE, warning=FALSE, message=FALSE}
+
+Encargos_Total$data_de_vencimento <- dmy(Encargos_Total$data_de_vencimento)
+
+qtd_faturas <-
+  Encargos_Total %>%
+  group_by(numero_fatura, valor_liquido_da_fatura, data_de_vencimento) %>%
+  summarise()
+
+DT::datatable(qtd_faturas[1:nrow(qtd_faturas), 1:ncol(qtd_faturas)],
+              #class = "display",
+              class = 'cell-border stripe',
+              caption = 'Tabela 4: Controle de Faturas',
+              filter = 'top',
+              options = list(
+              pageLength = 100, #nrow(especifica_servicos_geral
+              dom = 'tp'))
+
+```
+
+
+Informações  {data-icon="fas fa-bullhorn"}
+======
+
+Row
+------
+
+### Informações úteis {.no-title}
+
+> Informações Úteis
+
+**Site NUMAE**
+
+- [Clique Aqui](https://sites.google.com/pgfn.gov.br/coplan-numae/resumo)
+
+
+**Sobre o Contrato:**
+
+- Nº: 9912503765
+
+
+**Fonte dos Dados**
+
+- Sistema do Correios disponível [AQUI](https://apps.correios.com.br/sfe/inicio/inicio.jsf)
+
+<!-- **Contato** -->
+
+<!-- - Telefones:  -->
+
+
+**Frequência de Atualização dos dados**
+
+- Mensal
