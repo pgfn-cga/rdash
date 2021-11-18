@@ -43,7 +43,7 @@ library(svDialogs)
   
 # load(paste("~/R/base_correios/bases_correios_", ultima_datinha, ".RData", sep=""))
 
-load("C:/Users/03417022185/Documents/R/base_correios/bases_correios_2021-10-18.RData")
+load("C:/Users/03417022185/Documents/R/base_correios/bases_correios_2021-11-05.RData")
 options(repos = list(CRAN="http://cran.rstudio.com/"))
 
 
